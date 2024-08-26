@@ -35,7 +35,7 @@ class PacketAnalyzer:
 
     def packet_to_dict(self, packet):
         return {
-            layer.name: {
+            layer.__class__.__name__: {
                 field.name: str(getattr(layer, field.name))
                 for field in layer.fields_desc
                 if hasattr(layer, field.name)
