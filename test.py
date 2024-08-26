@@ -2,7 +2,7 @@ from flask import Flask, Response, jsonify, request
 from scapy.all import sniff, raw
 import threading
 import time
-import base64
+import binascii
 
 app = Flask(__name__)
 
@@ -21,40 +21,25 @@ class PacketAnalyzer:
     def stop_sniffing(self):
         if self.sniffing:
             self.sniffing = False
-            if self.sniffer_thread:
-                self.sniffer_thread.join()
+            self.sniffer_thread.join()
 
     def sniff_packets(self):
-        try:
-            sniff(prn=self.packet_callback, store=0, stop_filter=lambda x: not self.sniffing, filter='udp or esp')
-        except Exception as e:
-            print(f"Error in sniff_packets: {e}")
+        sniff(prn=self.packet_callback, store=0, stop_filter=lambda x: not self.sniffing, filter='udp or esp')
 
     def packet_callback(self, packet):
-        try:
-            packet_info = {
-                'summary': packet.summary(),
-                'time': time.time(),
-                'hex': base64.b64encode(raw(packet)).decode('utf-8'),
-                'layers': self.get_packet_layers(packet)
-            }
-            self.packets.append(packet_info)
-        except Exception as e:
-            print(f"Error in packet_callback: {e}")
+        packet_info = {
+            'summary': packet.summary(),
+            'time': time.time(),
+            'details': self.packet_to_dict(packet)
+        }
+        self.packets.append(packet_info)
 
-    def get_packet_layers(self, packet):
-        layers = []
-        while packet:
-            layer_name = packet.name
-            layer_fields = {}
-            for field in packet.fields:
-                try:
-                    layer_fields[field] = packet.get_field(field).i2repr(packet, getattr(packet, field))
-                except:
-                    layer_fields[field] = str(getattr(packet, field))
-            layers.append({'name': layer_name, 'fields': layer_fields})
-            packet = packet.payload if hasattr(packet, 'payload') else None
-        return layers
+    def packet_to_dict(self, packet):
+        return {
+            'repr': repr(packet),
+            'show': packet.show(dump=True),
+            'hexdump': binascii.hexlify(raw(packet)).decode()
+        }
 
 analyzer = PacketAnalyzer()
 
@@ -76,9 +61,7 @@ def index():
         .packet-item { cursor: pointer; padding: 5px; border-bottom: 1px solid #eee; }
         .packet-item:hover { background-color: #f0f0f0; }
         .packet-details { margin-top: 20px; border: 1px solid #ccc; padding: 10px; }
-        .layer { margin-bottom: 10px; }
-        .layer-name { font-weight: bold; }
-        .field { margin-left: 20px; }
+        pre { white-space: pre-wrap; word-wrap: break-word; }
     </style>
 </head>
 <body>
@@ -93,14 +76,12 @@ def index():
         </div>
         <div v-if="selectedPacket" class="packet-details">
             <h3>Packet Details:</h3>
-            <div v-for="layer in selectedPacket.layers" :key="layer.name" class="layer">
-                <div class="layer-name">{{ layer.name }}</div>
-                <div v-for="(value, key) in layer.fields" :key="key" class="field">
-                    {{ key }}: {{ value }}
-                </div>
-            </div>
+            <h4>Representation:</h4>
+            <pre>{{ selectedPacket.details.repr }}</pre>
+            <h4>Show Output:</h4>
+            <pre>{{ selectedPacket.details.show }}</pre>
             <h4>Hexdump:</h4>
-            <pre>{{ hexdump(selectedPacket.hex) }}</pre>
+            <pre>{{ selectedPacket.details.hexdump }}</pre>
         </div>
     </div>
     <script>
@@ -136,15 +117,6 @@ def index():
                     axios.get(`/packet/${index}`).then(response => {
                         this.selectedPacket = response.data;
                     });
-                },
-                hexdump(hex) {
-                    const bytes = atob(hex);
-                    let result = '';
-                    for (let i = 0; i < bytes.length; i += 16) {
-                        let line = bytes.slice(i, i + 16).split('').map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join(' ');
-                        result += line.padEnd(48, ' ') + '  ' + bytes.slice(i, i + 16).replace(/[^\x20-\x7E]/g, '.') + '\n';
-                    }
-                    return result;
                 }
             }
         });
