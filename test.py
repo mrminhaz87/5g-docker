@@ -1,7 +1,8 @@
 from flask import Flask, Response, jsonify, request
-from scapy.all import sniff
+from scapy.all import sniff, raw
 import threading
 import time
+import base64
 
 app = Flask(__name__)
 
@@ -23,24 +24,30 @@ class PacketAnalyzer:
             self.sniffer_thread.join()
 
     def sniff_packets(self):
-        sniff(prn=self.packet_callback, store=0, stop_filter=lambda x: not self.sniffing)
+        sniff(prn=self.packet_callback, store=0, stop_filter=lambda x: not self.sniffing, filter='udp or esp')
 
     def packet_callback(self, packet):
         packet_info = {
             'summary': packet.summary(),
             'time': time.time(),
-            'details': self.packet_to_dict(packet)
+            'hex': base64.b64encode(raw(packet)).decode('utf-8'),
+            'layers': self.get_packet_layers(packet)
         }
         self.packets.append(packet_info)
 
-    def packet_to_dict(self, packet):
-        return {
-            layer.__class__.__name__: {
-                field.name: str(getattr(layer, field.name))
-                for field in layer.fields_desc
-                if hasattr(layer, field.name)
-            } for layer in packet.layers()
-        }
+    def get_packet_layers(self, packet):
+        layers = []
+        while packet:
+            layer_name = packet.name
+            layer_fields = {}
+            for field in packet.fields:
+                try:
+                    layer_fields[field] = packet.get_field(field).i2repr(packet, getattr(packet, field))
+                except:
+                    layer_fields[field] = str(getattr(packet, field))
+            layers.append({'name': layer_name, 'fields': layer_fields})
+            packet = packet.payload if hasattr(packet, 'payload') else None
+        return layers
 
 analyzer = PacketAnalyzer()
 
@@ -61,7 +68,10 @@ def index():
         .packet-list { height: 400px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; }
         .packet-item { cursor: pointer; padding: 5px; border-bottom: 1px solid #eee; }
         .packet-item:hover { background-color: #f0f0f0; }
-        .packet-details { margin-top: 20px; border: 1px solid #ccc; padding: 10px; white-space: pre-wrap; }
+        .packet-details { margin-top: 20px; border: 1px solid #ccc; padding: 10px; }
+        .layer { margin-bottom: 10px; }
+        .layer-name { font-weight: bold; }
+        .field { margin-left: 20px; }
     </style>
 </head>
 <body>
@@ -76,7 +86,14 @@ def index():
         </div>
         <div v-if="selectedPacket" class="packet-details">
             <h3>Packet Details:</h3>
-            <pre>{{ JSON.stringify(selectedPacket.details, null, 2) }}</pre>
+            <div v-for="layer in selectedPacket.layers" :key="layer.name" class="layer">
+                <div class="layer-name">{{ layer.name }}</div>
+                <div v-for="(value, key) in layer.fields" :key="key" class="field">
+                    {{ key }}: {{ value }}
+                </div>
+            </div>
+            <h4>Hexdump:</h4>
+            <pre>{{ hexdump(selectedPacket.hex) }}</pre>
         </div>
     </div>
     <script>
@@ -112,6 +129,15 @@ def index():
                     axios.get(`/packet/${index}`).then(response => {
                         this.selectedPacket = response.data;
                     });
+                },
+                hexdump(hex) {
+                    const bytes = atob(hex);
+                    let result = '';
+                    for (let i = 0; i < bytes.length; i += 16) {
+                        let line = bytes.slice(i, i + 16).split('').map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join(' ');
+                        result += line.padEnd(48, ' ') + '  ' + bytes.slice(i, i + 16).replace(/[^\x20-\x7E]/g, '.') + '\n';
+                    }
+                    return result;
                 }
             }
         });
