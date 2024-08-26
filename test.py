@@ -21,19 +21,26 @@ class PacketAnalyzer:
     def stop_sniffing(self):
         if self.sniffing:
             self.sniffing = False
-            self.sniffer_thread.join()
+            if self.sniffer_thread:
+                self.sniffer_thread.join()
 
     def sniff_packets(self):
-        sniff(prn=self.packet_callback, store=0, stop_filter=lambda x: not self.sniffing, filter='udp or esp')
+        try:
+            sniff(prn=self.packet_callback, store=0, stop_filter=lambda x: not self.sniffing, filter='udp or esp')
+        except Exception as e:
+            print(f"Error in sniff_packets: {e}")
 
     def packet_callback(self, packet):
-        packet_info = {
-            'summary': packet.summary(),
-            'time': time.time(),
-            'hex': base64.b64encode(raw(packet)).decode('utf-8'),
-            'layers': self.get_packet_layers(packet)
-        }
-        self.packets.append(packet_info)
+        try:
+            packet_info = {
+                'summary': packet.summary(),
+                'time': time.time(),
+                'hex': base64.b64encode(raw(packet)).decode('utf-8'),
+                'layers': self.get_packet_layers(packet)
+            }
+            self.packets.append(packet_info)
+        except Exception as e:
+            print(f"Error in packet_callback: {e}")
 
     def get_packet_layers(self, packet):
         layers = []
