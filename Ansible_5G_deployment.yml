@@ -430,7 +430,7 @@
         - name  : Create Docker custom network
           shell:  | 
                 docker network create --subnet={{ docker_custom_subnet_network }} --driver bridge {{ docker_custom_network_name }}            
-        
+
         - name: Run free5gc MONGO-DB container
           docker_container:
             name: "{{ MONGO_DB_container_name }}"
@@ -474,7 +474,7 @@
             privileged: yes
             devices:
               - "/dev/net/tun:/dev/net/tun"
-            cap_add:
+            capabilities:
               - NET_ADMIN
             command: bash
           when: deploy_free5gc == 'true'
@@ -552,7 +552,7 @@
               - "{{ ENB_container_name }}_data:{{ ENB_folder_name_container_name }}"
             restart_policy: always
             privileged: yes
-            cap_add:
+            capabilities:
               - NET_ADMIN
             command: bash
           when: deploy_oaisim == 'true'
@@ -569,10 +569,10 @@
               - "{{ UE_container_name }}_data:{{ UE_folder_name_container_name }}"
             restart_policy: always
             privileged: yes
-            cap_add:
+            capabilities:
               - NET_ADMIN
             command: bash
-          when: deploy_oaisim == 'true'
+          when: deploy_oaisim == 'true'        
                 
         - name  : Build enB rcc.band7.tm1.nfapi.conf file 1/3 
           shell : |
