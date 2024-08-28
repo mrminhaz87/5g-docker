@@ -56,6 +56,19 @@
             - { ue_id: UE1 ,   msin: '0000000002' }
             - { ue_id: UE2 ,   msin: '0000000003' }
     tasks:
+        - name: Create persistent volumes for containers
+          docker_volume:
+            name: "{{ item }}_data"
+          loop:
+            - "{{ MONGO_DB_container_name }}"
+            - "{{ AMF_container_name }}"
+            - "{{ UPF_container_name }}"
+            - "{{ SMF_container_name }}"
+            - "{{ HSS_container_name }}"
+            - "{{ PCRF_container_name }}"
+            - "{{ WEB_UI_container_name }}"
+            - "{{ ENB_container_name }}"
+            - "{{ UE_container_name }}"
         - name: Environment validation!
           assert:
             that:
@@ -300,7 +313,7 @@
 
         - name  : Add Docker APT repository
           apt_repository:
-            repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ansible_distribution_release}} edge
+            repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable
 
         - name  : Update APT
           shell :  |
@@ -400,51 +413,149 @@
         - name  : Create Docker custom network
           shell:  | 
                 docker network create --subnet={{ docker_custom_subnet_network }} --driver bridge {{ docker_custom_network_name }}            
- 
-        - name  : Run free5gc MONGO-DB container
-          shell:  |
-                docker run -ti -d --net {{ docker_custom_network_name }} --ip {{ ip_address_MONGO_DB }} --name {{ MONGO_DB_container_name }} {{ free5gc_mongodb_image_name }} bash
-          when  : deploy_free5gc == 'true'
+        
+        - name: Run free5gc MONGO-DB container
+          docker_container:
+            name: "{{ MONGO_DB_container_name }}"
+            image: "{{ free5gc_mongodb_image_name }}"
+            network_mode: "{{ docker_custom_network_name }}"
+            networks:
+              - name: "{{ docker_custom_network_name }}"
+                ipv4_address: "{{ ip_address_MONGO_DB }}"
+            volumes:
+              - "{{ MONGO_DB_container_name }}_data:/data/db"
+            restart_policy: always
+            command: bash
+          when: deploy_free5gc == 'true'
 
-        - name  : Run free5gc AMF container
-          shell :  |
-                docker run -ti -d --privileged --net {{ docker_custom_network_name }} --ip {{ ip_address_AMF }} --name {{ AMF_container_name }} {{ free5gc_st1_image_name }} bash 
-          when  : deploy_free5gc == 'true'
+        - name: Run free5gc AMF container
+          docker_container:
+            name: "{{ AMF_container_name }}"
+            image: "{{ free5gc_st1_image_name }}"
+            network_mode: "{{ docker_custom_network_name }}"
+            networks:
+              - name: "{{ docker_custom_network_name }}"
+                ipv4_address: "{{ ip_address_AMF }}"
+            volumes:
+              - "{{ AMF_container_name }}_data:{{ path_workspace_free5gc }}"
+            restart_policy: always
+            privileged: yes
+            command: bash
+          when: deploy_free5gc == 'true'
 
-        - name  : Run free5gc UPF container
-          shell :  |
-                docker run -ti -d --device=/dev/net/tun:/dev/net/tun --cap-add=NET_ADMIN --privileged --net {{ docker_custom_network_name }} --ip {{ ip_address_UPF }} --name {{ UPF_container_name }} {{ free5gc_st1_image_name }} bash 
-          when  : deploy_free5gc == 'true'
+        - name: Run free5gc UPF container
+          docker_container:
+            name: "{{ UPF_container_name }}"
+            image: "{{ free5gc_st1_image_name }}"
+            network_mode: "{{ docker_custom_network_name }}"
+            networks:
+              - name: "{{ docker_custom_network_name }}"
+                ipv4_address: "{{ ip_address_UPF }}"
+            volumes:
+              - "{{ UPF_container_name }}_data:{{ path_workspace_free5gc }}"
+            restart_policy: always
+            privileged: yes
+            devices:
+              - "/dev/net/tun:/dev/net/tun"
+            cap_add:
+              - NET_ADMIN
+            command: bash
+          when: deploy_free5gc == 'true'
 
-        - name  : Run free5gc SMF container
-          shell:  |
-                docker run -ti -d --privileged --net {{ docker_custom_network_name }} --ip {{ ip_address_SMF }} --name {{ SMF_container_name }} {{ free5gc_st1_image_name }} bash 
-          when  : deploy_free5gc == 'true'
+        - name: Run free5gc SMF container
+          docker_container:
+            name: "{{ SMF_container_name }}"
+            image: "{{ free5gc_st1_image_name }}"
+            network_mode: "{{ docker_custom_network_name }}"
+            networks:
+              - name: "{{ docker_custom_network_name }}"
+                ipv4_address: "{{ ip_address_SMF }}"
+            volumes:
+              - "{{ SMF_container_name }}_data:{{ path_workspace_free5gc }}"
+            restart_policy: always
+            privileged: yes
+            command: bash
+          when: deploy_free5gc == 'true'
 
-        - name  : Run free5gc HSS container
-          shell:  |
-                docker run -ti -d --privileged --net {{ docker_custom_network_name }} --ip {{ ip_address_HSS }} --name {{ HSS_container_name }} {{ free5gc_st1_image_name }} bash 
-          when  : deploy_free5gc == 'true'
+        - name: Run free5gc HSS container
+          docker_container:
+            name: "{{ HSS_container_name }}"
+            image: "{{ free5gc_st1_image_name }}"
+            network_mode: "{{ docker_custom_network_name }}"
+            networks:
+              - name: "{{ docker_custom_network_name }}"
+                ipv4_address: "{{ ip_address_HSS }}"
+            volumes:
+              - "{{ HSS_container_name }}_data:{{ path_workspace_free5gc }}"
+            restart_policy: always
+            privileged: yes
+            command: bash
+          when: deploy_free5gc == 'true'
 
-        - name  : Run free5gc PCRF container
-          shell:  |
-                docker run -ti -d --privileged --net {{ docker_custom_network_name }} --ip {{ ip_address_PCRF }} --name {{ PCRF_container_name }} {{ free5gc_st1_image_name }} bash 
-          when  : deploy_free5gc == 'true'
+        - name: Run free5gc PCRF container
+          docker_container:
+            name: "{{ PCRF_container_name }}"
+            image: "{{ free5gc_st1_image_name }}"
+            network_mode: "{{ docker_custom_network_name }}"
+            networks:
+              - name: "{{ docker_custom_network_name }}"
+                ipv4_address: "{{ ip_address_PCRF }}"
+            volumes:
+              - "{{ PCRF_container_name }}_data:{{ path_workspace_free5gc }}"
+            restart_policy: always
+            privileged: yes
+            command: bash
+          when: deploy_free5gc == 'true'
 
-        - name  : Run free5gc WEBUI container
-          shell :  |
-                docker run -ti -d -p {{ web_application_access_port }}:3000 --net {{ docker_custom_network_name }} --ip {{ ip_address_WEB_UI }} --name {{ WEB_UI_container_name }} {{ free5gc_webui_image_name }} bash
-          when  : deploy_free5gc == 'true'
+        - name: Run free5gc WEBUI container
+          docker_container:
+            name: "{{ WEB_UI_container_name }}"
+            image: "{{ free5gc_webui_image_name }}"
+            network_mode: "{{ docker_custom_network_name }}"
+            networks:
+              - name: "{{ docker_custom_network_name }}"
+                ipv4_address: "{{ ip_address_WEB_UI }}"
+            volumes:
+              - "{{ WEB_UI_container_name }}_data:{{ path_workspace_free5gc }}/webui"
+            restart_policy: always
+            ports:
+              - "{{ web_application_access_port }}:3000"
+            command: bash
+          when: deploy_free5gc == 'true'
 
-        - name  : Run OpenAirSIM-enB container
-          shell :  |
-                docker run -ti -d --cap-add=NET_ADMIN --privileged --net {{ docker_custom_network_name }} --ip {{ ip_address_OAISIM_ENB }} --name {{ ENB_container_name }} {{ oaisim_enb_image_name }} bash 
-          when  : deploy_oaisim == 'true'
+        - name: Run OpenAirSIM-enB container
+          docker_container:
+            name: "{{ ENB_container_name }}"
+            image: "{{ oaisim_enb_image_name }}"
+            network_mode: "{{ docker_custom_network_name }}"
+            networks:
+              - name: "{{ docker_custom_network_name }}"
+                ipv4_address: "{{ ip_address_OAISIM_ENB }}"
+            volumes:
+              - "{{ ENB_container_name }}_data:{{ ENB_folder_name_container_name }}"
+            restart_policy: always
+            privileged: yes
+            cap_add:
+              - NET_ADMIN
+            command: bash
+          when: deploy_oaisim == 'true'
 
-        - name  : Run OpenAirSIM-UE container
-          shell :  |
-                docker run -ti -d --cap-add=NET_ADMIN --privileged --net {{ docker_custom_network_name }} --ip {{ ip_address_OAISIM_UE }} --name {{ UE_container_name }} {{ oaisim_ue_image_name }} bash 
-          when  : deploy_oaisim == 'true'
+        - name: Run OpenAirSIM-UE container
+          docker_container:
+            name: "{{ UE_container_name }}"
+            image: "{{ oaisim_ue_image_name }}"
+            network_mode: "{{ docker_custom_network_name }}"
+            networks:
+              - name: "{{ docker_custom_network_name }}"
+                ipv4_address: "{{ ip_address_OAISIM_UE }}"
+            volumes:
+              - "{{ UE_container_name }}_data:{{ UE_folder_name_container_name }}"
+            restart_policy: always
+            privileged: yes
+            cap_add:
+              - NET_ADMIN
+            command: bash
+          when: deploy_oaisim == 'true'
                 
         - name  : Build enB rcc.band7.tm1.nfapi.conf file 1/3 
           shell : |
@@ -1089,5 +1200,11 @@
           shell : |
               docker exec -it -d {{ UE_container_name }} /bin/sh -c "cd /root/ue/cmake_targets/ran_build/build && ./lte-uesoftmodem -O /root/ue/ci-scripts/conf_files/ue.nfapi.conf --L2-emul 3 --num-ues {{ num_ues_init_simulation }} --nums_ue_thread 1 --nokrnmod 1 > ue.log 2>&1"
           when  : init_ue == 'true'
+
+        - name: Enable Docker service on boot
+          systemd:
+            name: docker
+            enabled: yes
+            state: started
 
 
