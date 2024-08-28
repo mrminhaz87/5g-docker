@@ -576,7 +576,7 @@
 
         - name: Wait for ENB container to be running
           shell: >
-            docker inspect -f '{{.State.Running}}' {{ ENB_container_name }}
+            docker inspect -f {% raw %}'{{.State.Running}}'{% endraw %} {{ ENB_container_name }}
           register: container_status
           until: container_status.stdout == "true"
           retries: 30
