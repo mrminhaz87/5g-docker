@@ -573,6 +573,44 @@
               - NET_ADMIN
             command: bash
           when: deploy_oaisim == 'true'        
+        - name: Wait for ENB container to be in running state
+          docker_container_info:
+            name: "{{ ENB_container_name }}"
+          register: enb_container_status
+          until: enb_container_status.container.State.Status == "running"
+          retries: 30
+          delay: 10
+          when: deploy_oaisim == 'true'
+
+        - name: Check if rcc.band7.tm1.nfapi.conf exists in ENB container
+          docker_container_exec:
+            container: "{{ ENB_container_name }}"
+            command: test -f enb/ci-scripts/conf_files/rcc.band7.tm1.nfapi.conf
+          register: file_check
+          ignore_errors: yes
+          when: deploy_oaisim == 'true'
+
+        - name: Remove rcc.band7.tm1.nfapi.conf if it exists
+          docker_container_exec:
+            container: "{{ ENB_container_name }}"
+            command: rm enb/ci-scripts/conf_files/rcc.band7.tm1.nfapi.conf
+          when: 
+            - deploy_oaisim == 'true'
+            - file_check.rc == 0
+
+        - name: Build enB rcc.band7.tm1.nfapi.conf file
+          template:
+            src: rcc.band7.tm1.nfapi.conf.j2
+            dest: "{{ BASE_DIR_INSTALL }}/rcc.band7.tm1.nfapi.conf"
+          when: deploy_oaisim == 'true'
+
+        - name: Copy rcc.band7.tm1.nfapi.conf to ENB container
+          docker_cp:
+            container: "{{ ENB_container_name }}"
+            src: "{{ BASE_DIR_INSTALL }}/rcc.band7.tm1.nfapi.conf"
+            dest: "/enb/ci-scripts/conf_files/rcc.band7.tm1.nfapi.conf"
+            mode: pull
+          when: deploy_oaisim == 'true'
                 
         - name  : Build enB rcc.band7.tm1.nfapi.conf file 1/3 
           shell : |
