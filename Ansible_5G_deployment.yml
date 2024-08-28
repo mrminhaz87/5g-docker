@@ -572,7 +572,8 @@
             capabilities:
               - NET_ADMIN
             command: bash
-          when: deploy_oaisim == 'true'        
+          when: deploy_oaisim == 'true'   
+               
         - name: Wait for ENB container to be in running state
           docker_container_info:
             name: "{{ ENB_container_name }}"
