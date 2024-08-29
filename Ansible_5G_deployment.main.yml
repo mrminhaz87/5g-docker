@@ -56,170 +56,6 @@
             - { ue_id: UE1 ,   msin: '0000000002' }
             - { ue_id: UE2 ,   msin: '0000000003' }
     tasks:
-        - name: Ensure Docker is configured to start on boot
-          systemd:
-            name: docker
-            enabled: yes
-            state: started
-
-        - name: Install docker-compose
-          pip:
-            name: docker-compose
-            state: present
-
-        - name: Create docker-compose.yml file
-          copy:
-            dest: "{{ BASE_DIR_INSTALL }}/docker-compose.yml"
-            content: |
-              version: '3'
-              services:
-                mongodb:
-                  image: {{ free5gc_mongodb_image_name }}
-                  container_name: {{ MONGO_DB_container_name }}
-                  restart: always
-                  networks:
-                    {{ docker_custom_network_name }}:
-                      ipv4_address: {{ ip_address_MONGO_DB }}
-                  volumes:
-                    - {{ BASE_DIR_INSTALL }}/mongodb_data:/data/db
-
-                amf:
-                  image: {{ free5gc_st1_image_name }}
-                  container_name: {{ AMF_container_name }}
-                  restart: always
-                  privileged: true
-                  networks:
-                    {{ docker_custom_network_name }}:
-                      ipv4_address: {{ ip_address_AMF }}
-                  volumes:
-                    - {{ BASE_DIR_INSTALL }}/free5gc_config:/root/free5gc-stage-1/install/etc/free5gc
-                  command: /root/free5gc-stage-1/install/bin/free5gc-amfd
-
-                upf:
-                  image: {{ free5gc_st1_image_name }}
-                  container_name: {{ UPF_container_name }}
-                  restart: always
-                  privileged: true
-                  networks:
-                    {{ docker_custom_network_name }}:
-                      ipv4_address: {{ ip_address_UPF }}
-                  volumes:
-                    - {{ BASE_DIR_INSTALL }}/free5gc_config:/root/free5gc-stage-1/install/etc/free5gc
-                  command: /root/free5gc-stage-1/install/bin/free5gc-upfd
-
-                smf:
-                  image: {{ free5gc_st1_image_name }}
-                  container_name: {{ SMF_container_name }}
-                  restart: always
-                  privileged: true
-                  networks:
-                    {{ docker_custom_network_name }}:
-                      ipv4_address: {{ ip_address_SMF }}
-                  volumes:
-                    - {{ BASE_DIR_INSTALL }}/free5gc_config:/root/free5gc-stage-1/install/etc/free5gc
-                  command: /root/free5gc-stage-1/install/bin/free5gc-smfd
-
-                hss:
-                  image: {{ free5gc_st1_image_name }}
-                  container_name: {{ HSS_container_name }}
-                  restart: always
-                  privileged: true
-                  networks:
-                    {{ docker_custom_network_name }}:
-                      ipv4_address: {{ ip_address_HSS }}
-                  volumes:
-                    - {{ BASE_DIR_INSTALL }}/free5gc_config:/root/free5gc-stage-1/install/etc/free5gc
-                  command: /root/free5gc-stage-1/install/bin/nextepc-hssd
-
-                pcrf:
-                  image: {{ free5gc_st1_image_name }}
-                  container_name: {{ PCRF_container_name }}
-                  restart: always
-                  privileged: true
-                  networks:
-                    {{ docker_custom_network_name }}:
-                      ipv4_address: {{ ip_address_PCRF }}
-                  volumes:
-                    - {{ BASE_DIR_INSTALL }}/free5gc_config:/root/free5gc-stage-1/install/etc/free5gc
-                  command: /root/free5gc-stage-1/install/bin/nextepc-pcrfd
-
-                webui:
-                  image: {{ free5gc_webui_image_name }}
-                  container_name: {{ WEB_UI_container_name }}
-                  restart: always
-                  networks:
-                    {{ docker_custom_network_name }}:
-                      ipv4_address: {{ ip_address_WEB_UI }}
-                  ports:
-                    - "{{ web_application_access_port }}:3000"
-                  command: npm run dev
-
-                enb:
-                  image: {{ oaisim_enb_image_name }}
-                  container_name: {{ ENB_container_name }}
-                  restart: always
-                  privileged: true
-                  networks:
-                    {{ docker_custom_network_name }}:
-                      ipv4_address: {{ ip_address_OAISIM_ENB }}
-                  volumes:
-                    - {{ BASE_DIR_INSTALL }}/enb_config:/root/enb/ci-scripts/conf_files
-                  command: >
-                    /bin/sh -c "cd /root/enb/cmake_targets/ran_build/build &&
-                    ./lte-softmodem -O /root/enb/ci-scripts/conf_files/rcc.band7.tm1.nfapi.conf > enb.log 2>&1"
-
-                ue:
-                  image: {{ oaisim_ue_image_name }}
-                  container_name: {{ UE_container_name }}
-                  restart: always
-                  privileged: true
-                  networks:
-                    {{ docker_custom_network_name }}:
-                      ipv4_address: {{ ip_address_OAISIM_UE }}
-                  volumes:
-                    - {{ BASE_DIR_INSTALL }}/ue_config:/root/ue/ci-scripts/conf_files
-                  command: >
-                    /bin/sh -c "cd /root/ue/cmake_targets/ran_build/build &&
-                    ./lte-uesoftmodem -O /root/ue/ci-scripts/conf_files/ue.nfapi.conf --L2-emul 3 --num-ues {{ num_ues_init_simulation }} --nums_ue_thread 1 --nokrnmod 1 > ue.log 2>&1"
-
-              networks:
-                {{ docker_custom_network_name }}:
-                  driver: bridge
-                  ipam:
-                    config:
-                      - subnet: {{ docker_custom_subnet_network }}
-
-        - name: Start containers using docker-compose
-          docker_compose:
-            project_src: "{{ BASE_DIR_INSTALL }}"
-            state: present
-
-        - name: Create systemd service for docker-compose
-          copy:
-            dest: /etc/systemd/system/free5gc-docker.service
-            content: |
-              [Unit]
-              Description=Free5GC Docker Compose
-              Requires=docker.service
-              After=docker.service
-
-              [Service]
-              Type=oneshot
-              RemainAfterExit=yes
-              WorkingDirectory={{ BASE_DIR_INSTALL }}
-              ExecStart=/usr/local/bin/docker-compose up -d
-              ExecStop=/usr/local/bin/docker-compose down
-
-              [Install]
-              WantedBy=multi-user.target
-
-        - name: Enable and start free5gc-docker service
-          systemd:
-            name: free5gc-docker
-            enabled: yes
-            state: started
-            daemon_reload: yes
-
         - name: Environment validation!
           assert:
             that:
@@ -564,6 +400,51 @@
         - name  : Create Docker custom network
           shell:  | 
                 docker network create --subnet={{ docker_custom_subnet_network }} --driver bridge {{ docker_custom_network_name }}            
+ 
+        - name  : Run free5gc MONGO-DB container
+          shell:  |
+                docker run -ti -d --net {{ docker_custom_network_name }} --ip {{ ip_address_MONGO_DB }} --name {{ MONGO_DB_container_name }} {{ free5gc_mongodb_image_name }} bash
+          when  : deploy_free5gc == 'true'
+
+        - name  : Run free5gc AMF container
+          shell :  |
+                docker run -ti -d --privileged --net {{ docker_custom_network_name }} --ip {{ ip_address_AMF }} --name {{ AMF_container_name }} {{ free5gc_st1_image_name }} bash 
+          when  : deploy_free5gc == 'true'
+
+        - name  : Run free5gc UPF container
+          shell :  |
+                docker run -ti -d --device=/dev/net/tun:/dev/net/tun --cap-add=NET_ADMIN --privileged --net {{ docker_custom_network_name }} --ip {{ ip_address_UPF }} --name {{ UPF_container_name }} {{ free5gc_st1_image_name }} bash 
+          when  : deploy_free5gc == 'true'
+
+        - name  : Run free5gc SMF container
+          shell:  |
+                docker run -ti -d --privileged --net {{ docker_custom_network_name }} --ip {{ ip_address_SMF }} --name {{ SMF_container_name }} {{ free5gc_st1_image_name }} bash 
+          when  : deploy_free5gc == 'true'
+
+        - name  : Run free5gc HSS container
+          shell:  |
+                docker run -ti -d --privileged --net {{ docker_custom_network_name }} --ip {{ ip_address_HSS }} --name {{ HSS_container_name }} {{ free5gc_st1_image_name }} bash 
+          when  : deploy_free5gc == 'true'
+
+        - name  : Run free5gc PCRF container
+          shell:  |
+                docker run -ti -d --privileged --net {{ docker_custom_network_name }} --ip {{ ip_address_PCRF }} --name {{ PCRF_container_name }} {{ free5gc_st1_image_name }} bash 
+          when  : deploy_free5gc == 'true'
+
+        - name  : Run free5gc WEBUI container
+          shell :  |
+                docker run -ti -d -p {{ web_application_access_port }}:3000 --net {{ docker_custom_network_name }} --ip {{ ip_address_WEB_UI }} --name {{ WEB_UI_container_name }} {{ free5gc_webui_image_name }} bash
+          when  : deploy_free5gc == 'true'
+
+        - name  : Run OpenAirSIM-enB container
+          shell :  |
+                docker run -ti -d --cap-add=NET_ADMIN --privileged --net {{ docker_custom_network_name }} --ip {{ ip_address_OAISIM_ENB }} --name {{ ENB_container_name }} {{ oaisim_enb_image_name }} bash 
+          when  : deploy_oaisim == 'true'
+
+        - name  : Run OpenAirSIM-UE container
+          shell :  |
+                docker run -ti -d --cap-add=NET_ADMIN --privileged --net {{ docker_custom_network_name }} --ip {{ ip_address_OAISIM_UE }} --name {{ UE_container_name }} {{ oaisim_ue_image_name }} bash 
+          when  : deploy_oaisim == 'true'
                 
         - name  : Build enB rcc.band7.tm1.nfapi.conf file 1/3 
           shell : |
