@@ -425,7 +425,7 @@
           shell:  |
                 docker run -ti -d --restart unless-stopped --privileged --net {{ docker_custom_network_name }} --ip {{ ip_address_HSS }} --name {{ HSS_container_name }} {{ free5gc_st1_image_name }} bash 
           when  : deploy_free5gc == 'true'
-s
+
         - name  : Run free5gc PCRF container
           shell:  |
                 docker run -ti -d --restart unless-stopped --privileged --net {{ docker_custom_network_name }} --ip {{ ip_address_PCRF }} --name {{ PCRF_container_name }} {{ free5gc_st1_image_name }} bash 
