@@ -1,14 +1,12 @@
 ####################################
 #
 #    IPsec between UE and UPF
-#    Abdul Aziz/Hussaini/Ezekiel
-#    Carleton University
 #
 ####################################
 
 from scapy.all import * 
 from scapy.config import conf 
-
+from scapy.layers.ipsec import SecurityAssociation, ESP
 
 sock = conf.L3socket(iface='eth0') 
  
